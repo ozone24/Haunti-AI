@@ -1,0 +1,74 @@
+[package]
+name = "haunti-core"
+version = "0.7.0"
+edition = "2021"
+license = "AGPL-3.0"
+repository = "https://github.com/haunti-ai/core"
+description = "Solana-based decentralized AI protocol with ZKML/FHE integration"
+
+[features]
+default = ["solana-program/entrypoint", "gpu-acceleration"]
+gpu-acceleration = ["cuda", "fhe-rs/cuda"]
+testnet = ["solana-program/testnet", "anchor-lang/testnet"]
+
+[dependencies]
+# Solana Core
+solana-program = { version = "1.18.0", features = ["program", "borsh"] }
+anchor-lang = { version = "0.29.0", features = ["init-space"] }
+anchor-spl = { version = "0.29.0" }
+
+# Cryptography & ZKP
+arkworks = { 
+    git = "https://github.com/arkworks-rs/circom-compat", 
+    rev = "a3d4f5e", 
+    features = ["plonk", "bls12_381"] 
+}
+merlin = { version = "3.0.0", features = ["transcript"] }
+fhe-rs = { version = "0.23.1", features = ["serde", "nightly"] }
+poseidon-252 = { version = "2.1.0" }
+
+# Zero-Knowledge ML
+circuit-benchmark = { git = "https://github.com/zk-ml/circuit-benchmark", tag = "v0.4.0" }
+plonky3 = { version = "0.1.4", features = ["parallel"] }
+solana-zkutil = { git = "https://github.com/solana-labs/zkutil", branch = "main" }
+
+# GPU Acceleration
+cuda = { version = "0.1.4", optional = true }
+rustacuda = { version = "0.2.0", features = ["device"] }
+
+# Data Handling
+borsh = "0.10.2"
+serde = { version = "1.0.193", features = ["derive"] }
+serde_json = "1.0.108"
+
+# Utils
+thiserror = "1.0.50"
+lazy_static = "1.4.0"
+arrayref = "0.3.7"
+log = "0.4.20"
+solana-logger = { version = "1.18.0", features = ["log"] }
+
+[dev-dependencies]
+solana-program-test = "1.18.0"
+solana-sdk = "1.18.0"
+proptest = { version = "1.3.1", features = ["std"] }
+arbitrary = { version = "1.3.0", features = ["derive"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3
+panic = 'abort'
+incremental = false
+
+[profile.test]
+opt-level = 1
+debug = true
+
+[workspace]
+members = [
+    "programs/haunti-core",
+    "programs/model-nft",
+    "programs/token-vault"
+]
+exclude = ["legacy"]
