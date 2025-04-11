@@ -1,0 +1,194 @@
+# Haunti AI Autoscaling Engine v4.2
+# Combines HPA/VPA/Cluster Autoscaler with AI-specific scaling policies
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: haunti-ai-hpa
+  namespace: haunti-gpu
+  annotations:
+    haunti.ai/scaling-logic: "hybrid-lstm-predictive"
+    haunti.ai/emergency-thresholds: "zk-prover-latency>2000ms,fhe-ops>90%"
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: haunti-gpu-node
+  minReplicas: 6
+  maxReplicas: 100
+  behavior:
+    scaleUp:
+      policies:
+        - type: Pods
+          value: 4
+          periodSeconds: 60
+        - type: Percent
+          value: 20
+          periodSeconds: 90
+      selectPolicy: Max
+      stabilizationWindowSeconds: 300
+    scaleDown:
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 180
+        - type: Percent
+          value: 10
+          periodSeconds: 300
+      selectPolicy: Min
+      stabilizationWindowSeconds: 600
+  metrics:
+    # Hardware Metrics
+    - type: Resource
+      resource:
+        name: nvidia.com/gpu
+        target:
+          type: Utilization
+          averageUtilization: 85
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 75
+    # AI Workload Metrics
+    - type: Pods
+      pods:
+        metric:
+          name: haunti_zk_proof_time_ms
+          selector:
+            matchLabels:
+              component: zk-prover
+        target:
+          type: AverageValue
+          averageValue: 800
+    - type: Object
+      object:
+        metric:
+          name: haunti_fhe_ops_per_sec
+          selector:
+            matchLabels:
+              service: fhe-executor
+        describedObject:
+          apiVersion: v1
+          kind: Service
+          name: haunti-fhe-service
+        target:
+          type: Value
+          value: 50000
+    # Blockchain Metrics
+    - type: External
+      external:
+        metric:
+          name: solana_transaction_load
+          selector:
+            matchExpressions:
+              - key: cluster
+                operator: In
+                values: ["mainnet"]
+        target:
+          type: AverageValue
+          averageValue: 1000
+
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: haunti-ai-vpa
+  namespace: haunti-gpu
+spec:
+  targetRef:
+    apiVersion: "apps/v1"
+    kind: Deployment
+    name: haunti-gpu-node
+  updatePolicy:
+    updateMode: "Auto"
+  resourcePolicy:
+    containerPolicies:
+      - containerName: "*"
+        minAllowed:
+          cpu: "4"
+          memory: "16Gi"
+          nvidia.com/gpu: "1"
+        maxAllowed:
+          cpu: "32"
+          memory: "120Gi"
+          nvidia.com/gpu: "4"
+        controlledResources: ["cpu", "memory", "nvidia.com/gpu"]
+
+---
+# Custom Metrics Adapter (Prometheus)
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: haunti-scaling-metrics
+  namespace: monitoring
+spec:
+  groups:
+    - name: haunti-ai-scaling
+      rules:
+        - record: haunti:zk_proof_time_ms:avg
+          expr: avg(haunti_zk_proof_duration_ms{service="zk-prover"})
+        - record: haunti:fhe_ops_per_sec:rate
+          expr: rate(haunti_fhe_operations_total[5m])
+        - record: solana:transaction_load:rate
+          expr: rate(solana_transactions_processed[5m])
+
+---
+# Priority Class for Critical Workloads
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: haunti-critical
+value: 1000000
+globalDefault: false
+description: "Maximum priority for FHE/ZK compute tasks"
+
+---
+# Scaling Safety Limits
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: haunti-gpu-pdb
+  namespace: haunti-gpu
+spec:
+  minAvailable: 60%
+  selector:
+    matchLabels:
+      app: haunti-gpu-worker
+
+---
+# GPU Scaling Quotas
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: haunti-gpu-quota
+  namespace: haunti-gpu
+spec:
+  hard:
+    requests.nvidia.com/gpu: "64"
+    limits.nvidia.com/gpu: "128"
+    pods: "200"
+
+---
+# Network Bandwidth Policy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: haunti-scaling-network
+  namespace: haunti-gpu
+spec:
+  podSelector:
+    matchLabels:
+      app: haunti-gpu-worker
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              component: blockchain-node
+      ports:
+        - port: 8001
+          protocol: TCP
+          name: ipfs-p2p
