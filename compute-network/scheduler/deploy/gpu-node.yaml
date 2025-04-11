@@ -1,0 +1,233 @@
+# Haunti GPU Node Deployment (v3.4.0)
+# Orchestrates AI/ML tasks with GPU acceleration and privacy guarantees
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: haunti-gpu
+  labels:
+    ai.haunti.cluster: "true"
+    solana.network: mainnet
+
+---
+# Dedicated Service Account with GPU access
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: haunti-gpu-executor
+  namespace: haunti-gpu
+automountServiceAccountToken: false
+
+---
+# Persistent Storage for Models/Proofs
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: haunti-gpu-ssd
+provisioner: pd.csi.storage.gke.io
+parameters:
+  type: pd-ssd
+  replication-type: regional-pd
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: haunti-gpu-storage
+  namespace: haunti-gpu
+spec:
+  storageClassName: haunti-gpu-ssd
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 2Ti
+
+---
+# Core GPU Node Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: haunti-gpu-node
+  namespace: haunti-gpu
+  labels:
+    task: encrypted-compute
+    accelerator: nvidia-gpu
+spec:
+  replicas: 8
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 25%
+  selector:
+    matchLabels:
+      app: haunti-gpu-worker
+  template:
+    metadata:
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+      labels:
+        app: haunti-gpu-worker
+        solana.validator: "true"
+    spec:
+      serviceAccountName: haunti-gpu-executor
+      priorityClassName: haunti-critical
+      nodeSelector:
+        cloud.google.com/gke-accelerator: nvidia-tesla-a100
+        solana.validator/gpu: "true"
+      tolerations:
+        - key: "nvidia.com/gpu"
+          operator: "Exists"
+          effect: "NoSchedule"
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 3000
+        fsGroup: 2000
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: gpu-driver-check
+          image: nvidia/cuda:12.2.0-base-ubuntu22.04
+          command: ["sh", "-c"]
+          args:
+            - nvidia-smi --query-gpu=driver_version --format=csv,noheader && 
+              echo "CUDA 12.2 Verified"
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+      containers:
+        - name: haunti-gpu-executor
+          image: haunti/gpu-node:3.4.0
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: SOLANA_RPC_ENDPOINT
+              value: "https://api.mainnet.solana.com"
+            - name: NVIDIA_DRIVER_CAPABILITIES
+              value: "compute,utility"
+            - name: CUDA_VISIBLE_DEVICES
+              value: "all"
+          args:
+            - "--zk-prover=plonky3"
+            - "--fhe-backend=cuda"
+            - "--metrics-addr=0.0.0.0:9090"
+          ports:
+            - containerPort: 9090
+              name: metrics
+              protocol: TCP
+            - containerPort: 8001
+              name: ipfs-p2p
+              protocol: TCP
+          resources:
+            limits:
+              nvidia.com/gpu: 2
+              memory: 120Gi
+              cpu: 24
+            requests:
+              nvidia.com/gpu: 2
+              memory: 100Gi
+              cpu: 16
+          volumeMounts:
+            - name: haunti-storage
+              mountPath: /var/haunti
+            - name: cuda-libs
+              mountPath: /usr/local/cuda
+              readOnly: true
+          livenessProbe:
+            exec:
+              command:
+                - "haunti-gpu"
+                - "healthcheck"
+            initialDelaySeconds: 30
+            periodSeconds: 60
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 9090
+            initialDelaySeconds: 15
+            periodSeconds: 20
+      volumes:
+        - name: haunti-storage
+          persistentVolumeClaim:
+            claimName: haunti-gpu-storage
+        - name: cuda-libs
+          hostPath:
+            path: /usr/local/cuda-12.2
+            type: Directory
+
+---
+# Monitoring and Auto-scaling
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: haunti-gpu-autoscaler
+  namespace: haunti-gpu
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: haunti-gpu-node
+  minReplicas: 6
+  maxReplicas: 30
+  metrics:
+    - type: Resource
+      resource:
+        name: nvidia.com/gpu
+        target:
+          type: Utilization
+          averageUtilization: 85
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+
+---
+# Network Policy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: haunti-gpu-isolation
+  namespace: haunti-gpu
+spec:
+  podSelector:
+    matchLabels:
+      app: haunti-gpu-worker
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: haunti-blockchain
+      ports:
+        - port: 8001
+          protocol: TCP
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: haunti-blockchain
+      ports:
+        - port: 8001
+          protocol: TCP
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 169.254.169.254/32
+      ports:
+        - port: 443
+          protocol: TCP
+        - port: 80
+          protocol: TCP
