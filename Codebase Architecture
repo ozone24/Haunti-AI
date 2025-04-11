@@ -1,0 +1,133 @@
+haunti-ai/
+│
+├── blockchain/                          # Solana Layer (Anchor Framework)
+│   ├── programs/                        # On-Chain Programs
+│   │   ├── haunti-core/                 # Main Protocol (Rust)
+│   │   │   ├── Cargo.toml              # Rust Dependencies
+│   │   │   ├── Xargo.toml              # Solana-Specific Build Config
+│   │   │   └── src/
+│   │   │       ├── lib.rs              # Program Entrypoint (Initialize Program)
+│   │   │       ├── instructions/       # Instruction Handlers
+│   │   │       │   ├── create_task.rs  # Task Creation Logic (Params: GPU Type, Reward, Deadline)
+│   │   │       │   ├── submit_proof.rs # Verify ZK Proofs via `solana_verifier.rs`
+│   │   │       │   └── mint_model.rs   # Mint ModelNFT with Metaplex Metadata
+│   │   │       └── state/              # PDA State Structs
+│   │   │           ├── task_state.rs   # Task Metadata (Encrypted IPFS CID, Solana Account Schema)
+│   │   │           └── model_state.rs  # ModelNFT Attributes (Owner, Accuracy, FHE Public Key)
+│   │   ├── model-nft/                  # Metaplex NFT Standard
+│   │   │   └── src/lib.rs              # Custom NFT Logic (Royalty Splits for Model Usage)
+│   │   └── token-vault/                # SPL Token Management
+│   │       └── src/lib.rs              # Escrow for $HAUNT Token Rewards
+│   ├── client-sdk/                     # TypeScript SDK
+│   │   ├── src/
+│   │   │   ├── client.ts              # Protocol Client Class (Anchor Provider Integration)
+│   │   │   ├── models.ts              # Data Types (TaskStatus, ModelMetadata)
+│   │   │   └── utils/
+│   │   │       ├── ipfs.ts            # IPFS Upload/Download via Pinata API
+│   │   │       └── crypto.ts          # Hybrid Encryption (AES-GCM + Solana `nacl` Box)
+│   │   └── test/
+│   │       ├── unit.test.ts           # Mock Solana Connection Tests
+│   │       └── integration.test.ts    # DevNet Task Lifecycle Testing
+│   └── scripts/                       # Deployment Scripts
+│       ├── deploy_protocol.sh         # Deploy Programs to Mainnet/DevNet
+│       └── init_devnet.sh             # Local Validator Setup with Pre-Funded Accounts
+│
+├── zero-knowledge/                     # Privacy Layer
+│   ├── zkml/                          # ZKML Circuits (Plonky3 + Circom)
+│   │   ├── circuits/                  # Circuit Definitions
+│   │   │   ├── training_verifier.circom # Verify Training Correctness (Input: Encrypted Gradients, Output: Model Hash)
+│   │   │   └── inference_verifier.circom # Verify Inference Integrity (Input: Encrypted Data, Output: Prediction Hash)
+│   │   ├── prover/                    # Proof Generation
+│   │   │   ├── plonky3_prover.rs      # Rust Prover with GPU Acceleration
+│   │   │   └── gpu_accelerator.cu     # CUDA Kernels for FFT Operations
+│   │   └── verifier/                  # On-Chain Verification
+│   │       └── solana_verifier.rs     # Solana Program ZK Verification Logic
+│   └── fhe/                           # FHE Implementation (TFHE-rs)
+│       ├── src/
+│       │   ├── encrypted_trainer.rs   # FHE Training Runtime (GPU-Accelerated)
+│       │   ├── encrypted_infer.rs     # FHE Inference Runtime (Batched Predictions)
+│       │   └── keys/
+│       │       ├── public_key.rs      # FHE Public Key Serialization (BSON Format)
+│       │       └── private_key.rs     # Secure Enclave Storage (AWS Nitro/HSM)
+│       └── benches/                   # Performance Benchmarks
+│           ├── fhe_training_bench.rs  # Training Time vs. Model Size
+│           └── fhe_inference_bench.rs # Latency per Inference Batch
+│
+├── compute-network/                   # Decentralized Compute Layer
+│   ├── node/                          # Rust Compute Node
+│   │   ├── src/
+│   │   │   ├── main.rs                # Node Entrypoint (CLI Arguments)
+│   │   │   ├── task_manager.rs        # Poll Solana for Tasks via RPC
+│   │   │   ├── fhe_executor.rs        # NVIDIA CUDA FHE Operations
+│   │   │   └── zk_prover.rs           # Distributed ZK Proof Generation (Plonky3)
+│   │   ├── Dockerfile                 # NVIDIA CUDA Base Image (nvidia/cuda:12.2.0-devel-ubuntu22.04)
+│   │   └── Cargo.toml                 # Node Dependencies (Tokio, Solana-Client)
+│   ├── scheduler/                     # Kubernetes Orchestration
+│   │   ├── deploy/                    # K8s Configurations
+│   │   │   ├── gpu-node.yaml          # GPU Node Pool (NodeSelector: nvidia.com/gpu)
+│   │   │   └── autoscaler.yaml        # Horizontal Pod Autoscaler (Based on GPU Load)
+│   │   └── src/                       # Scheduler Logic
+│   │       ├── bin_packing.rs         # Optimize GPU Resource Allocation
+│   │       └── fault_detector.rs      # Health Checks for Node Pods
+│   └── node-registry/                 # Node Registry Program
+│       └── programs/
+│           └── node-registry/src/lib.rs # Track Node Reputation & SLA Compliance
+│
+├── web/                               # Frontend & APIs
+│   ├── app/                           # Next.js Frontend
+│   │   ├── pages/                     # Next.js Routes
+│   │   │   ├── index.tsx              # Landing Page (Task Creation Wizard)
+│   │   │   ├── marketplace.tsx       # ModelNFT Trading UI (Filters: Accuracy, Price)
+│   │   │   └── dashboard.tsx         # User Dashboard (Task History, Earnings)
+│   │   ├── components/               # React Components
+│   │   │   ├── ModelUpload.tsx       # Encrypted Model Upload (Drag-and-Drop)
+│   │   │   └── TaskMonitor.tsx       # Real-Time Task Tracking (WebSocket Updates)
+│   │   └── utils/                    # Frontend Helpers
+│   │       ├── solana.ts             # Wallet Adapter (Phantom, Backpack)
+│   │       └── zkproof.ts           # ZK Proof Submission via `client.ts`
+│   └── admin/                         # Governance Dashboard
+│       ├── pages/
+│       │   └── governance.tsx        # DAO Proposal Voting (Quadratic Voting)
+│       └── components/
+│           └── ProposalCard.tsx      # Proposal Display (Voting Deadline, Status)
+│
+├── cross-chain/                       # Interoperability Layer
+│   ├── wormhole/                      # Solana-Ethereum Bridge
+│   │   ├── solana-client/             # Solana → EVM Adapter
+│   │   │   └── src/
+│   │   │       ├── send_message.rs    # Submit Solana Proofs to Ethereum
+│   │   │       └── verify_message.rs  # Verify Ethereum Receipts on Solana
+│   │   └── ethereum-client/           # EVM → Solana Adapter
+│   │       └── src/
+│   │           ├── attestation.rs     # Generate Attestation Proofs
+│   │           └── task_relay.rs     # Forward Ethereum Tasks to Solana
+│   └── chainlink/                     # Oracle Integration
+│       ├── adapters/
+│       │   └── data_feed.rs           # Fetch Off-Chain Data (e.g., Model Accuracy Metrics)
+│       └── jobs/
+│           └── model_metric_job.toml  # Custom Oracle Job (Aggregate Node Uptime)
+│
+├── monitoring/                        # Observability Stack
+│   ├── grafana/                       # Dashboards
+│   │   ├── task_monitoring.json       # Task Metrics (TPS, Avg. Proof Time)
+│   │   └── node_health.json           # Node Uptime, GPU Utilization, SLA Compliance
+│   ├── prometheus/                    # Metrics Collection
+│   │   └── prometheus.yml             # Scrape Config (Node Exporters, Solana Validators)
+│   └── alerts/                        # Alert Rules
+│       └── high_latency_alert.rules   # Trigger if Proof Generation > 10s
+│
+├── docs/                              # Documentation
+│   ├── DEVELOPER_GUIDE.md             # Codebase Walkthrough (Local Setup, Testing)
+│   ├── API_REFERENCE.md               # SDK & Contract APIs (Postman Collection)
+│   └── DEPLOYMENT.md                  # Production Setup (AWS/GCP, HSM Configuration)
+│
+├── scripts/                           # Automation Scripts
+│   ├── deploy_all.sh                  # Full Stack Deployment (Ansible Playbooks)
+│   └── benchmark.sh                   # End-to-End Performance Testing
+│
+├── .github/                           # CI/CD Workflows
+│   └── workflows/
+│       ├── main.yml                   # Build & Unit Tests (Rust/TS)
+│       └── deploy.yml                 # Production Deployment (Kubernetes Rollout)
+│
+└── Dockerfile                         # Base Image (Ubuntu 22.04 + Rust Nightly)
