@@ -1,0 +1,269 @@
+{
+  "$schema": "https://schemas.haunti.ai/node-health/v3",
+  "version": "3.1.2",
+  "environment": "production",
+  
+  "monitoring": {
+    "collection_interval": "30s",
+    "retention_period": "30d",
+    "real_time_threshold": "2s"
+  },
+
+  "resource_metrics": {
+    "cpu": {
+      "usage_threshold": 85.0,
+      "steal_threshold": 5.0,
+      "temperature": {
+        "critical": 90.0,
+        "warning": 75.0
+      }
+    },
+    "memory": {
+      "usage_threshold": 90.0,
+      "swap_threshold": 50.0,
+      "oom_kill_check": true
+    },
+    "gpu": {
+      "nvidia": {
+        "utilization_threshold": 95.0,
+        "memory_threshold": 90.0,
+        "temperature": {
+          "critical": 95.0,
+          "warning": 85.0
+        },
+        "ecc_errors": {
+          "correctable_max": 10,
+          "uncorrectable_max": 0
+        }
+      }
+    },
+    "storage": {
+      "rootfs": {
+        "usage_threshold": 90.0,
+        "inodes_threshold": 85.0
+      },
+      "ephemeral": {
+        "throughput": {
+          "read": "100MB/s",
+          "write": "50MB/s"
+        },
+        "latency": {
+          "read": "10ms",
+          "write": "20ms"
+        }
+      }
+    },
+    "network": {
+      "interface": "eth0",
+      "latency": {
+        "internal": "50ms",
+        "external": "100ms"
+      },
+      "packet_loss": 0.5,
+      "tcp_retransmit": 2.0,
+      "conntrack_usage": 80.0
+    }
+  },
+
+  "blockchain_metrics": {
+    "solana": {
+      "slot_drift": 50,
+      "vote_credits": {
+        "min_per_epoch": 1000
+      },
+      "leader_slots": {
+        "expected": 5,
+        "tolerance": 2
+      },
+      "rpc_health": {
+        "endpoint": "http://localhost:8899",
+        "timeout": "3s"
+      }
+    },
+    "storage_ledger": {
+      "replication_lag": "5m",
+      "integrity_check": {
+        "interval": "6h",
+        "depth": 1000
+      }
+    }
+  },
+
+  "service_health": {
+    "essential_services": [
+      {
+        "name": "haunti-node",
+        "systemd_unit": "haunti-node.service",
+        "restart_policy": {
+          "max_restarts": 3,
+          "time_window": "1h"
+        }
+      },
+      {
+        "name": "validator",
+        "health_endpoint": "http://localhost:8080/health",
+        "expected_version": "1.23.1"
+      }
+    ],
+    "dependency_services": {
+      "ipfs": {
+        "peer_count": 50,
+        "repo_size": "100GB"
+      },
+      "prometheus": {
+        "scrape_interval": "15s",
+        "tsdb_health": {
+          "chunks_to_head": 10000
+        }
+      }
+    }
+  },
+
+  "security_checks": {
+    "certificates": {
+      "expiry_threshold": "30d"
+    },
+    "ports": {
+      "unauthorized_listen": [],
+      "required_open": [8080, 9090]
+    },
+    "kernel": {
+      "livepatch": true,
+      "dirty_ratio": 40
+    },
+    "intrusion_detection": {
+      "audit_log_analysis": {
+        "patterns": [
+          "unauthorized_access",
+          "privilege_escalation"
+        ]
+      }
+    }
+  },
+
+  "alerting": {
+    "policies": [
+      {
+        "name": "critical_resource",
+        "condition": "cpu.usage > 95 || memory.usage > 95",
+        "severity": "critical",
+        "notification": {
+          "channels": ["pagerduty", "sms"],
+          "escalation": "immediate"
+        }
+      },
+      {
+        "name": "network_degradation",
+        "condition": "packet_loss > 1% || latency.external > 200ms",
+        "duration": "5m",
+        "severity": "warning",
+        "notification": {
+          "channels": ["slack"],
+          "runbook": "NET-101"
+        }
+      }
+    ],
+    "silences": [
+      {
+        "matchers": [
+          {"type": "host", "value": "node-05*"},
+          {"type": "alertname", "value": "planned_maintenance"}
+        ],
+        "duration": "8h"
+      }
+    ]
+  },
+
+  "logging": {
+    "level": "debug",
+    "rotation": {
+      "size": "100MB",
+      "keep": 10
+    },
+    "sanitization": {
+      "patterns": [
+        "private_key:.*",
+        "api_token:.*"
+      ]
+    },
+    "remote": {
+      "loki": {
+        "endpoint": "https://logs.haunti.ai",
+        "batch_size": 102400
+      }
+    }
+  },
+
+  "maintenance": {
+    "windows": [
+      {
+        "description": "weekly_standard",
+        "schedule": "Sat 00:00-04:00",
+        "timezone": "UTC"
+      }
+    ],
+    "override_policies": {
+      "allow_force": true,
+      "max_duration": "6h"
+    }
+  },
+
+  "custom_checks": [
+    {
+      "name": "gpu_mem_util",
+      "type": "script",
+      "path": "/opt/haunti/checks/gpu_mem.sh",
+      "interval": "5m",
+      "timeout": "30s"
+    },
+    {
+      "name": "chain_fork_check",
+      "type": "http",
+      "endpoint": "http://localhost:8899/fork-info",
+      "expect": {"status": "ok"},
+      "headers": {"Authorization": "Bearer ${API_TOKEN}"}
+    }
+  ],
+
+  "integration": {
+    "prometheus": {
+      "port": 9090,
+      "metrics_path": "/metrics"
+    },
+    "grafana": {
+      "dashboard_uid": "haunti-node-overview"
+    },
+    "cloud_metadata": {
+      "aws": {
+        "imds_v2": true
+      }
+    }
+  },
+
+  "security": {
+    "tls": {
+      "version": "1.3",
+      "ciphers": [
+        "TLS_AES_256_GCM_SHA384"
+      ]
+    },
+    "authentication": {
+      "metrics": {
+        "type": "bearer_token",
+        "rotation": "7d"
+      }
+    }
+  },
+
+  "compliance": {
+    "gdpr": {
+      "data_retention": {
+        "logs": "30d",
+        "metrics": "1y"
+      }
+    },
+    "iso_27001": {
+      "audit_interval": "6m"
+    }
+  }
+}
