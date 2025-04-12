@@ -1,6 +1,6 @@
 # Haunti - Decentralized Verifiable AI Infrastructure [v1.3.0]
 
-**Haunti is an open-source AI infrastructure framework built on BSC, empowering users to self-deploy and manage decentralized AI models through modular toolkits.**
+**Haunti is an open-source AI infrastructure framework built on Solana, empowering users to self-deploy and manage decentralized AI models through modular toolkits.**
 
 [![AGPL License](https://img.shields.io/badge/license-AGPL--3.0-green)](https://opensource.org/license/agpl-3-0/)
 [![Solana Version](https://img.shields.io/badge/Solana-1.17%2B-blue)](https://solana.com)
