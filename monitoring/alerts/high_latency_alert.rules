@@ -1,0 +1,185 @@
+# ================================================
+# Haunti High Latency Alert Rules
+# Version: 3.2.1
+# Scope: 2000+ nodes across AI training/inference/blockchain
+# ================================================
+
+groups:
+- name: haunti-latency-alerts
+  interval: 1m
+  rules:
+
+  # Tier 1: Critical User-Facing Services
+  - alert: CriticalAPIResponseDelay
+    expr: |
+      histogram_quantile(0.95,
+        sum by(le, service, region) (
+          rate(haunti_api_request_duration_seconds_bucket{job=~"api-gateway|model-serving"}[5m])
+        )
+      ) > 3
+    for: 3m
+    labels:
+      severity: critical
+      impact: user-facing
+      team: sre
+    annotations:
+      summary: "Critical API Latency Spike - {{ $labels.service }} ({{ $labels.region }})"
+      description: |
+        95th percentile latency for {{ $labels.service }} exceeds 3s (current: {{ $value }}s).
+        Possible causes: Backend overload, DB contention, or caching layer failure
+      playbook: "https://haunti.alerts/runbook/api-latency"
+
+  # Tier 2: Cross-Chain Validation Delays  
+  - alert: CrossChainVerificationTimeout
+    expr: |
+      avg by(chain_type) (
+        haunti_cross_chain_validation_duration_seconds{chain_type=~"solana|ethereum|cosmos"}
+      ) > 15
+    for: 5m
+    labels:
+      severity: warning
+      category: blockchain
+    annotations:
+      summary: "Cross-Chain Validation Delay - {{ $labels.chain_type | upper }}"
+      description: |
+        Average cross-chain verification time exceeded 15s (current: {{ $value }}s).
+        Check Wormhole/ICS relayers and validator health
+
+  # Tier 3: GPU Compute Backlog
+  - alert: GPUComputeQueueOverload
+    expr: |
+      (
+        haunti_gpu_compute_duration_seconds{accelerator=~"a100|h100"} > 8
+      and
+        haunti_gpu_task_queue_length > 50
+      )
+      unless
+        haunti_maintenance_mode{service="gpu-cluster"} == 1
+    labels:
+      severity: critical
+      resource: gpu
+    annotations:
+      action: "Scale GPU workers or optimize model batches"
+      impact: "Training jobs delayed, model updates stalled"
+
+  # Tier 4: Storage Layer Latency
+  - alert: GlobalStorageLatencyAnomaly
+    expr: |
+      (
+        predict_linear(haunti_storage_op_duration_seconds[1h], 3600) > 15
+      or
+        haunti_storage_op_duration_seconds > 10
+      )
+      and ON (instance)
+        haunti_storage_health_status == 1
+    for: 10m
+    labels:
+      severity: warning
+      component: storage
+    annotations:
+      dashboard: "https://grafana.haunti/storage-latency"
+
+  # Tier 5: Consensus Layer Impact
+  - alert: BlockchainFinalityDelay
+    expr: |
+      solana_block_finality_delay{chain="mainnet"} > 12
+      and
+      haunti_chain_validation_duration_seconds > 8
+    labels:
+      severity: critical
+      layer: consensus
+    annotations:
+      priority: "P0"
+      sla_impact: "Chain validation SLAs at risk"
+
+  # Tier 6: Multi-Region Correlation
+  - alert: GlobalLatencyCorrelation
+    expr: |
+      count by (service) (
+        haunti_api_request_duration_seconds{quantile="0.95"} > 5
+      ) >= 3
+      and
+      count by (service) (
+        haunti_api_request_duration_seconds{quantile="0.95"} > 5
+      ) / count(haunti_api_request_duration_seconds{quantile="0.95"}) >= 0.7
+    labels:
+      severity: emergency
+    annotations:
+      response: "Initiate global traffic rerouting"
+
+  # Tier 7: Dependency Chain Analysis
+  - alert: DependencyChainDegradation
+    expr: |
+      (
+        haunti_api_request_duration_seconds{service="model-api"} > 5
+      * on (pod)
+        haunti_db_query_duration_seconds{operation="read"} > 3
+      * on (node)
+        haunti_cache_hit_ratio < 0.6
+      )
+      unless
+        haunti_circuit_breaker{component="database"} == 1
+    for: 8m
+    labels:
+      severity: critical
+      analysis: "dependency-chain"
+    annotations:
+      root_cause: "DB latency impacting API through cache misses"
+
+  # Tier 8: Cold Start Impact
+  - alert: ColdStartLatencyDegradation
+    expr: |
+      (
+        haunti_model_load_duration_seconds{phase="cold"} > 45
+      and
+        haunti_model_serving_health == 1
+      )
+      or
+      (
+        haunti_model_load_duration_seconds{phase="warm"} > 15
+        and
+        rate(haunti_model_load_operations[5m]) > 5
+      )
+    labels:
+      severity: warning
+      optimization: "pre-warming"
+    annotations:
+      action: "Review model pre-loading configuration"
+
+  # Tier 9: Cross-Service Baseline Breach
+  - alert: CrossServiceLatencyDeviation
+    expr: |
+      (
+        haunti_api_request_duration_seconds{quantile="0.95"}
+        > ignoring (service) group_left
+        (avg(haunti_api_request_duration_seconds{quantile="0.95"}) by (env) * 3)
+      )
+      and
+      (
+        haunti_api_error_rate > 0.1
+        or
+        haunti_api_throughput < 100
+      )
+    labels:
+      severity: critical
+    annotations:
+      impact: "Service degradation with elevated error rate"
+
+  # Tier 10: Long-Tail Detection
+  - alert: P99LatencyAnomaly
+    expr: |
+      histogram_quantile(0.99,
+        rate(haunti_api_request_duration_seconds_bucket[15m])
+      ) > 10
+      and
+      histogram_quantile(0.99,
+        rate(haunti_api_request_duration_seconds_bucket[15m])
+      ) / 
+      histogram_quantile(0.95,
+        rate(haunti_api_request_duration_seconds_bucket[15m])
+      ) > 2.5
+    labels:
+      severity: warning
+      analysis: "long-tail"
+    annotations:
+      insight: "Severe latency disparity between P95 and P99 percentiles"
