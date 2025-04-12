@@ -1,0 +1,104 @@
+# ================================================
+# Haunti Model Monitoring Job Configuration
+# Version: 2.4.0
+# ================================================
+
+[general]
+job_name = "resnet50_prod_monitoring"
+environment = "production"                # staging|production|testing
+sampling_interval = "5s"                  # Supports units: ns, us, ms, s, m, h
+max_retries = 3                           # Retry failed metric collection
+timeout = "10s"                           # Per-collection timeout
+enable_telemetry = true                    # Export job health metrics
+
+[source]
+type = "prometheus"                       # prometheus|custom|datadog|elasticsearch
+endpoint = "http://prometheus:9090"       
+query = """
+    sum by (instance, model_version) (
+        rate(haunti_model_inference_duration_seconds_sum{job="ai-models"}[1m])
+    )
+"""                                      # PromQL query for metrics
+auth = { type = "bearer", token_file = "/secrets/prom-token" }
+
+[metrics]
+# List of metrics to extract from source
+[[metrics.targets]]
+name = "inference_latency"
+type = "gauge"                           # gauge|counter|histogram
+labels = ["instance", "model_version"]
+unit = "seconds"
+
+[[metrics.targets]]
+name = "throughput"
+type = "counter"
+calculation = "delta"                    # delta|rate|instant
+unit = "requests/second"
+
+[processing]
+batch_size = 1000                        # Metrics per processing batch
+window_size = "5m"                       # Time window for aggregate metrics
+aggregations = ["p95", "mean", "max"]     # Supported: count, sum, min, max, mean, stddev, pXX
+
+[storage]
+type = "s3"                              # s3|gcs|local|influxdb
+path = "s3://haunti-metrics/prod/models/"
+compression = "zstd"                     # none|gzip|zstd|lz4
+retention = "720h"                       # Auto-delete after 30 days
+encryption = { enabled = true, kms_key_id = "arn:aws:kms:us-west-2:111122223333:key/1234abcd-12ab-34cd-56ef-1234567890ab" }
+
+[alerting]
+enabled = true
+initial_delay = "5m"                     # Wait before first alert evaluation
+alert_silence_period = "30m"             # Minimum time between repeated alerts
+
+# Alert conditions
+[[alerting.rules]]
+name = "high_latency"
+condition = "inference_latency > 0.5"    # Threshold in seconds
+severity = "critical"                    # critical|warning|info
+for = "5m"                               # Duration before triggering
+annotations = { 
+    summary = "High inference latency detected",
+    description = "Latency for {{ $labels.instance }} exceeded 500ms (current: {{ $value }}s)"
+}
+
+[[alerting.rules]]
+name = "throughput_drop"
+condition = "rate(throughput[10m]) < 100"
+severity = "warning"
+for = "15m"
+
+[alerting.notifications]
+slack_webhook = "https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX"
+email = "ai-ops@company.com"
+pagerduty_integration_key = "/secrets/pd-key"
+
+[cache]
+enabled = true
+type = "redis"                           # redis|memcached|in-memory
+address = "redis://redis:6379"
+ttl = "1h"                               # Cache expiration
+compression = true
+
+[performance]
+max_parallelism = 8                      # Concurrent metric processors
+memory_limit = "2Gi"                      # Max RAM usage (units: B, K, M, G, T)
+cpu_quota = 2.5                          # CPU cores (fractional values allowed)
+
+[logging]
+level = "info"                           # debug|info|warn|error
+format = "json"                          # text|json
+rotation = { size = "100MB", keep = 5 }   # File rotation policy
+
+[healthcheck]
+endpoint = "http://localhost:9091/metrics"
+interval = "1m"
+failure_threshold = 3
+
+# ================================================
+# EXAMPLE USAGE:
+# 1. Save as /etc/haunti/jobs/model_metrics.toml
+# 2. Validate config: hauntictl check-config model_metrics.toml
+# 3. Deploy job: hauntictl job start model_metrics.toml
+# ================================================
