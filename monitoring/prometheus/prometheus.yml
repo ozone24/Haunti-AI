@@ -1,0 +1,180 @@
+# === Haunti Global Monitoring Configuration ===
+# Version: 2.45.0
+# Environment: Production
+# Targets: 2000+ nodes across 3 clouds
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 30s
+  scrape_timeout: 10s
+  external_labels:
+    environment: 'prod'
+    region: 'global-ai-cluster'
+    project: 'haunti-v3'
+
+# ========== Core Infrastructure ==========
+scrape_configs:
+  # Haunti AI Nodes
+  - job_name: 'haunti-nodes'
+    metrics_path: '/haunti-metrics'
+    scheme: 'https'
+    tls_config:
+      cert_file: '/certs/haunti-node.crt'
+      key_file: '/certs/haunti-node.key'
+    static_configs:
+      - targets: 
+        - 'haunti-node-01.prod.haunti.ai:9143'
+        - 'haunti-node-02.prod.haunti.ai:9143'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __scheme__
+        replacement: 'https'
+
+  # Solana Validator Cluster
+  - job_name: 'solana-validators'
+    metrics_path: '/metrics'
+    scheme: 'http'
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names: ['solana-prod']
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        regex: 'solana-validator'
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_ip]
+        replacement: '${1}:9090'
+        target_label: __address__
+
+  # GPU Metrics (NVIDIA/DCU)
+  - job_name: 'gpu-metrics'
+    scrape_interval: 5s
+    metrics_path: '/metrics'
+    static_configs:
+      - targets:
+        - 'gpu-monitor-01:9400'
+        - 'gpu-monitor-02:9400'
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'nvidia_gpu_.*|dcu_utilization.*'
+        action: keep
+
+# ========== AI Training/Inference ==========
+  # Model Training Metrics
+  - job_name: 'ai-training'
+    metrics_path: '/training/metrics'
+    scheme: 'https'
+    authorization:
+      credentials_file: '/secrets/training-monitor.cred'
+    static_configs:
+      - targets:
+        - 'training-orchestrator.prod.haunti.ai:9145'
+    params:
+      track: ['throughput', 'accuracy', 'convergence']
+
+  # Inference Service Monitoring
+  - job_name: 'ai-inference'
+    metrics_path: '/inference/metrics'
+    scheme: 'https'
+    static_configs:
+      - targets:
+        - 'inference-gateway.prod.haunti.ai:9146'
+    metric_relabel_configs:
+      - regex: 'inference_latency_(quantile|sum)'
+        action: keep
+
+# ========== Storage Layer ==========
+  # IPFS Cluster Monitoring
+  - job_name: 'ipfs-cluster'
+    metrics_path: '/debug/metrics'
+    static_configs:
+      - targets: ['ipfs-01:9200', 'ipfs-02:9200']
+    relabel_configs:
+      - source_labels: [__address__]
+        regex: 'ipfs-(.*):9200'
+        replacement: '${1}'
+        target_label: node
+
+  # Ceph Storage Metrics
+  - job_name: 'ceph-storage'
+    file_sd_configs:
+      - files:
+        - '/etc/prometheus/ceph-targets.json'
+    metrics_path: '/metrics'
+    scheme: 'http'
+
+# ========== Security Layer ==========
+  # Vault PKI Monitoring
+  - job_name: 'vault-pki'
+    scheme: 'https'
+    tls_config:
+      ca_file: '/certs/haunti-ca.pem'
+    static_configs:
+      - targets: ['vault.prod.haunti.ai:9201']
+
+  # Firewall Traffic Metrics
+  - job_name: 'network-firewalls'
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['firewall-01:9243', 'firewall-02:9243']
+
+# ========== High Availability ==========
+remote_write:
+  - url: "https://victoriametrics.prod.haunti.ai/api/v1/write"
+    queue_config:
+      max_samples_per_send: 10000
+      capacity: 50000
+    tls_config:
+      cert_file: "/certs/vm-write.crt"
+      key_file: "/certs/vm-write.key"
+
+  - url: "https://thanos.prod.haunti.ai/api/v1/receive"
+    write_relabel_configs:
+      - regex: 'ALERTS|haunti_chain_.*'
+        action: keep
+
+remote_read:
+  - url: "https://thanos.prod.haunti.ai/api/v1/query"
+    read_recent: true
+
+# ========== Alerting Rules ==========
+rule_files:
+  - '/etc/prometheus/rules/haunti-alerts.yml'
+  - '/etc/prometheus/rules/solana-alerts.yml'
+  - '/etc/prometheus/rules/gpu-alerts.yml'
+
+alerting:
+  alertmanagers:
+    - scheme: https
+      path_prefix: /
+      timeout: 10s
+      api_version: v2
+      static_configs:
+        - targets:
+          - 'alertmanager-01.prod.haunti.ai:9093'
+          - 'alertmanager-02.prod.haunti.ai:9093'
+      tls_config:
+        ca_file: '/certs/haunti-ca.pem'
+        cert_file: '/certs/alertmanager.crt'
+        key_file: '/certs/alertmanager.key'
+
+# ========== Advanced Configuration ==========
+storage:
+  tsdb:
+    path: '/prometheus/data'
+    retention: 30d
+    out_of_order_time_window: 1h
+  remote:
+    read_sample_limit: 10000000
+
+query:
+  timeout: 2m
+  lookback_delta: 5m
+
+tracing:
+  endpoint: 'jaeger.prod.haunti.ai:6831'
+  sampler_type: 'probabilistic'
+  sampler_param: 0.1
