@@ -1,0 +1,181 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "version": "2.4.0",
+  "monitoring_system": {
+    "name": "haunti_ai_monitor",
+    "environment": "production",
+    "update_frequency": "5m"
+  },
+
+  "task_definitions": [
+    {
+      "task_id": "resnet50_inference",
+      "task_type": "batch",
+      "description": "Image classification using ResNet-50",
+      "schedule": {
+        "cron": "0 */2 * * *",
+        "timezone": "UTC"
+      },
+      "resource_requirements": {
+        "cpu": "4",
+        "memory": "16Gi",
+        "gpu": {
+          "type": "nvidia-tesla-v100",
+          "count": 2
+        },
+        "max_duration": "2h"
+      }
+    }
+  ],
+
+  "metrics_config": {
+    "system_metrics": {
+      "cpu": ["usage_percent", "throttled_seconds"],
+      "memory": ["used_bytes", "available_bytes"],
+      "gpu": {
+        "utilization": ["compute", "memory"],
+        "temperature": true
+      },
+      "network": ["bytes_sent", "bytes_recv"]
+    },
+    "application_metrics": {
+      "inference": {
+        "latency": ["p95", "p99"],
+        "throughput": "requests/second",
+        "error_rate": "percentage"
+      },
+      "data_processing": {
+        "items_processed": "count",
+        "queue_size": "gauge"
+      }
+    },
+    "custom_metrics": [
+      {
+        "name": "model_drift",
+        "type": "gauge",
+        "help": "Measure of model prediction drift",
+        "labels": ["model_version", "dataset"]
+      }
+    ]
+  },
+
+  "alerting_policies": [
+    {
+      "alert_name": "high_cpu_usage",
+      "condition": "system.cpu.usage_percent > 90",
+      "duration": "5m",
+      "severity": "critical",
+      "notifications": {
+        "channels": ["slack", "pagerduty"],
+        "escalation_policy": "ai-ops-team"
+      }
+    },
+    {
+      "alert_name": "model_drift_anomaly",
+      "condition": "custom.model_drift > 2.5",
+      "duration": "1h",
+      "severity": "warning",
+      "notifications": {
+        "channels": ["email"],
+        "recipients": ["data-science-team@haunti.ai"]
+      }
+    }
+  ],
+
+  "logging_config": {
+    "level": "info",
+    "rotation": {
+      "strategy": "time-based",
+      "interval": "24h",
+      "retention": "30d"
+    },
+    "storage": {
+      "local_path": "/var/log/haunti",
+      "remote": {
+        "s3_bucket": "haunti-ai-logs",
+        "compression": "gzip"
+      }
+    },
+    "sensitive_data_filtering": [
+      "credit_card",
+      "api_key",
+      "jwt_token"
+    ]
+  },
+
+  "integration_endpoints": {
+    "prometheus": {
+      "url": "http://prometheus:9090",
+      "scrape_interval": "15s"
+    },
+    "grafana": {
+      "url": "http://grafana:3000",
+      "dashboard_ids": ["haunti-ai-overview"]
+    },
+    "slack": {
+      "webhook_url": "${HAUNTI_SLACK_WEBHOOK}",
+      "channel": "#ai-alerts"
+    }
+  },
+
+  "retention_policies": {
+    "metrics": "30d",
+    "logs": "90d",
+    "traces": "7d",
+    "backups": {
+      "strategy": "incremental",
+      "schedule": "daily",
+      "storage_class": "GLACIER"
+    }
+  },
+
+  "security": {
+    "encryption": {
+      "at_rest": "AES-256",
+      "in_transit": "TLS1.3"
+    },
+    "access_control": {
+      "rbac": {
+        "roles": [
+          {
+            "name": "ai-engineer",
+            "permissions": ["metrics:read", "alerts:ack"]
+          }
+        ]
+      }
+    }
+  },
+
+  "compliance": {
+    "gdpr": {
+      "data_anonymization": true,
+      "right_to_be_forgotten": true
+    },
+    "hipaa": {
+      "audit_logging": true
+    }
+  },
+
+  "telemetry": {
+    "performance": {
+      "sampling_rate": "10%",
+      "trace_exporter": "jaeger"
+    },
+    "health_check": {
+      "endpoint": "/health",
+      "timeout": "10s"
+    }
+  },
+
+  "extensions": {
+    "custom_plugins": [
+      {
+        "name": "gpu_metrics",
+        "version": "1.2.0",
+        "config": {
+          "poll_interval": "30s"
+        }
+      }
+    ]
+  }
+}
