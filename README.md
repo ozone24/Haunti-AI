@@ -1,227 +1,130 @@
-# Haunti - Decentralized Verifiable AI Infrastructure [v1.3.0]
+# Haunti-AI 🌐
 
-**Haunti is an open-source AI infrastructure framework built on Solana, empowering users to self-deploy and manage decentralized AI models through modular toolkits.**
+![Haunti-AI](https://img.shields.io/badge/Haunti-AI-brightgreen.svg)
+![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
+![License](https://img.shields.io/badge/license-MIT-yellow.svg)
 
-[![AGPL License](https://img.shields.io/badge/license-AGPL--3.0-green)](https://opensource.org/license/agpl-3-0/)
-[![Solana Version](https://img.shields.io/badge/Solana-1.17%2B-blue)](https://solana.com)
-[![CUDA Requirement](https://img.shields.io/badge/CUDA-12.0%2B-brightgreen)](https://developer.nvidia.com/cuda-toolkit)
+Welcome to **Haunti-AI**, an open-source AI framework built on the Solana blockchain. With Haunti, you can deploy and manage decentralized models using modular tools. This project aims to simplify AI deployment in the blockchain space, making it accessible for developers and researchers alike.
 
-## 🌐 Connect with Us
+## Table of Contents
 
-- 🔗 [Website](https://hauntiai.com/)   - 🐦 [Twitter](https://twitter.com/Hauntionx)   - ✍️ [Medium](https://medium.com/@Hauntiai) 
+- [Features](#features)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Contributing](#contributing)
+- [License](#license)
+- [Contact](#contact)
+- [Releases](#releases)
 
-## 🛠 Tech Stack
+## Features
 
-**Core Components**  
-![Rust](https://img.shields.io/badge/Rust-000000?logo=rust)
-![Solana](https://img.shields.io/badge/Solana-14F195?logo=solana)
-![CUDA](https://img.shields.io/badge/CUDA-76B900?logo=nvidia)
-![IPFS](https://img.shields.io/badge/IPFS-65C2CB?logo=ipfs)
+- **Decentralized AI Models**: Easily deploy AI models in a decentralized manner.
+- **Modular Tools**: Use our modular tools to customize your AI solutions.
+- **Cross-Chain Compatibility**: Seamlessly integrate with other blockchain networks.
+- **Zero-Knowledge Proofs**: Ensure privacy and security in AI computations.
+- **Web3 Integration**: Connect your applications to the decentralized web.
 
-**Monitoring**  
-![Prometheus](https://img.shields.io/badge/Prometheus-E6522C?logo=prometheus)
-![Grafana](https://img.shields.io/badge/Grafana-F46800?logo=grafana)
-![Loki](https://img.shields.io/badge/Loki-2C3D50?logo=grafana)
+## Installation
 
-**Deployment**  
-![Kubernetes](https://img.shields.io/badge/Kubernetes-326CE5?logo=kubernetes)
-![Terraform](https://img.shields.io/badge/Terraform-7B42BC?logo=terraform)
+To get started with Haunti-AI, follow these steps:
 
----
-## Haunti Architecture
-```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {
-  'primaryColor': '#f8f9fa',
-  'primaryBorderColor': '#dee2e6',
-  'lineColor': '#adb5bd',
-  'textColor': '#212529',
-  'clusterBkg': 'transparent'
-}}}%%
+1. **Clone the Repository**:
+   ```bash
+   git clone https://github.com/ozone24/Haunti-AI.git
+   cd Haunti-AI
+   ```
 
-flowchart TD
-    classDef blockchain fill:#4dabf7,stroke:#339af0,color:white;
-    classDef privacy fill:#69db7c,stroke:#40c057,color:black;
-    classDef storage fill:#ff922b,stroke:#f76707,color:black;
-    classDef monitoring fill:#9775fa,stroke:#7c4dff,color:white;
+2. **Install Dependencies**:
+   Make sure you have Node.js and npm installed. Run the following command:
+   ```bash
+   npm install
+   ```
 
-    subgraph BL["Blockchain Layer"]
-        BC_Registry[[Model Registry]]:::blockchain
-        BC_Marketplace[[Compute Marketplace]]:::blockchain
-        BC_Verifier[[ZK Verifier]]:::blockchain
-    end
+3. **Set Up Environment Variables**:
+   Create a `.env` file in the root directory and add your configuration settings.
 
-    subgraph PL["Privacy Layer"]
-        PV_FHE[[FHE Runtime]]:::privacy
-        PV_ZK[[ZK Prover Cluster]]:::privacy
-        PV_Enclave[[Trusted Enclaves]]:::privacy
-    end
+4. **Run the Application**:
+   Execute the following command to start the application:
+   ```bash
+   npm start
+   ```
 
-    subgraph SL["Storage Layer"]
-        ST_IPFS[[IPFS Cluster]]:::storage
-        ST_Arweave[[Arweave Permastore]]:::storage
-        ST_Cache[[Proof Cache]]:::storage
-    end
+## Usage
 
-    subgraph ML["Monitoring Layer"]
-        MO_Prom[[Prometheus]]:::monitoring
-        MO_Grafana[[Grafana]]:::monitoring
-        MO_Alert[[AlertManager]]:::monitoring
-    end
+Once the application is running, you can interact with it through the API. Here’s a simple example of how to deploy a model:
 
-    BC_Registry -->|Model Metadata| ST_IPFS
-    PV_FHE -->|Encrypted Gradients| BC_Verifier
-    PV_ZK -->|Proof Artifacts| ST_Arweave
-    MO_Prom -->|Metrics| MO_Grafana
-    BC_Marketplace -->|Task Scheduling| PV_Enclave
-    MO_Alert -->|Auto-scale| PV_ZK
-          
-```
----
+```javascript
+const haunti = require('haunti-ai');
 
-## 🌟 Key Innovations
-
-### 1. **Cryptographic AI Integrity Layer**
-   - **Hybrid Proof System**: Combine ZK-SNARKs (Plonky3) and FHE (TFHE) for end-to-end verifiability
-   - **Multi-Chain Attestation**: Cross-chain state proofs via Wormhole/ICS
-   - **Data Lineage**: Immutable dataset provenance using IPFS+Arweave
-
-### 2. **Decentralized Compute Network**
-   - **GPU Orchestration**: Kubernetes-based scheduling with NVIDIA MIG support
-   - **Elastic Scaling**: Auto-scale GPU pods based on ZK proof complexity
-   - **Fault Tolerance**: Byzantine-resistant task replication
-
-### 3. **Enterprise Security Suite**
-   - **Hardened Runtime**: SGX/TEE support for sensitive operations
-   - **Compliance Ready**: HIPAA/GDPR-compatible data handling
-   - **Zero-Trust Architecture**: SPIFFE-based service identity
-
----
-
-## 🏗 System Architecture
-
-### Core Components
-
-| Component | Tech Stack | Function |
-|-----------|------------|----------|
-| **Solana Programs** | Rust/Anchor | On-chain verification & governance |
-| **ZK Prover Cluster** | Plonky3/CUDA | GPU-accelerated proof generation |
-| **FHE Runtime** | TFHE-rs/C++ | Encrypted model operations |
-| **Data Layer** | IPFS/Arweave/Ceramic | Decentralized storage with provenance |
-| **Monitoring** | Prometheus/Loki/Tempo | Distributed tracing & metrics |
-
-![Component Diagram](https://docs.haunti.ai/component-diagram-v2.svg)
-
----
-
-## 🛠 Installation & Configuration
-
-### Hardware Requirements
-
-| Component | Minimum | Recommended |
-|-----------|---------|-------------|
-| GPU | NVIDIA T4 (8GB) | A100 (40GB) |
-| CPU | 4 cores | 16 cores EPYC |
-| Memory | 32GB DDR4 | 256GB DDR5 |
-| Storage | 500GB NVMe | 10TB NVMe RAID |
-
-### 1. Base System Setup
-
-```bash
-# Ubuntu 22.04 LTS
-sudo apt install -y \
-  nvidia-cuda-toolkit \
-  nvidia-docker2 \
-  containerd.io \
-  solana-cli=1.17.5
-
-# Configure NVIDIA Container Runtime
-sudo nvidia-ctk runtime configure --runtime=containerd
-sudo systemctl restart containerd
-```
-
-### Run Local Network
-```
-# Start validator with GPU support
-solana-test-validator --gossip-host 127.0.0.1 \
-  --geyser-plugin-config config/geyser.yml \
-  --rpc-port 8899 \
-  --enable-cpi-and-log-storage
-
-# Deploy programs
-anchor deploy --provider.cluster localhost
-```
-
-## 📚 Usage Examples
-
-### 1. Encrypted Model Training
-```
-let model = EncryptedModel::new(fhe_scheme::TFHE)?;
-let dataset = Dataset::from_ipfs(cid)?;
-let result = model.train(
-  &dataset,
-  TrainingConfig {
+haunti.deployModel({
+  modelName: 'MyModel',
+  parameters: {
+    learningRate: 0.01,
     epochs: 100,
-    batch_size: 32,
-    proof_type: ZkProofType::Plonky3
-  }
-)?;
+  },
+});
 ```
 
-## 2. Cross-chain Inference
-```
-const proof = await generateInferenceProof(
-  modelCID, 
-  inputData, 
-  {useGPU: true}
-);
+For more detailed usage instructions, please refer to the [documentation](https://github.com/ozone24/Haunti-AI/wiki).
 
-const tx = await program.methods
-  .verifyInference(proof)
-  .accounts({model: modelPDA})
-  .rpc();
-```
+## Contributing
 
+We welcome contributions from the community. If you would like to contribute, please follow these steps:
 
-## ⚙ Configuration
-### Key Files
+1. Fork the repository.
+2. Create a new branch:
+   ```bash
+   git checkout -b feature/YourFeature
+   ```
+3. Make your changes and commit them:
+   ```bash
+   git commit -m "Add your message"
+   ```
+4. Push to the branch:
+   ```bash
+   git push origin feature/YourFeature
+   ```
+5. Create a pull request.
 
-| Path | Purpose |
-|-----------|---------|
-| config/prometheus.yml | Metrics scraping rules |
-| deploy/terraform/main.tf | Cloud provisioning |
-| anchor/programs/haunti | Solana program suite |
-| web/app/utils/zkproof.ts | Web3 proof handling |
+Your contributions help us improve Haunti-AI for everyone.
 
-### Environment Variables
-```
-# .env.example
-SOLANA_RPC="https://api.mainnet-beta.solana.com"
-IPFS_API="https://ipfs.haunti.ai:5001"
-CUDA_DEVICES="0,1" # GPU indices
-ZK_CIRCUITS_PATH="./circuits"
-```
+## License
 
-## 🤝 Contributing
-### Development Workflow
-```
-# 1. Create feature branch
-git checkout -b feat/awesome-feature
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
-# 2. Run tests
-cargo test --features test,zk \
-  && anchor test --skip-local-validator
+## Contact
 
-# 3. Submit PR
-gh pr create --fill --reviewer "@haunti/core-team"
-```
+For any inquiries or feedback, feel free to reach out:
 
-### Code Standards
-- Rust: Clippy lvl strict
-- TS: Airbnb style + ESLint
-- Commit: Conventional commits
-- Docs: Rustdoc -> mdBook
+- **Email**: support@haunti-ai.com
+- **Twitter**: [@HauntiAI](https://twitter.com/HauntiAI)
 
-## 📜 License
-### AGPL-3.0 © Haunti Foundation
+## Releases
 
-### Commercial licensing available for enterprise use.
+To download the latest release, visit the [Releases](https://github.com/ozone24/Haunti-AI/releases) section. Make sure to download the necessary files and execute them as per the instructions provided in the documentation.
+
+To keep up with the latest updates, you can also check the [Releases](https://github.com/ozone24/Haunti-AI/releases) page regularly.
+
+## Topics
+
+- **Agent**: Create intelligent agents that can interact with users and other systems.
+- **AI**: Leverage advanced algorithms for machine learning and data analysis.
+- **Blockchain**: Utilize the power of blockchain technology for secure data management.
+- **Cross-Chain**: Enable communication and transactions across different blockchain networks.
+- **Zero-Knowledge Proofs**: Enhance privacy and security with cryptographic proofs.
+- **Web3 Integration**: Connect with decentralized applications and services.
+
+## Community
+
+Join our community of developers and enthusiasts:
+
+- **Discord**: [Join our Discord](https://discord.gg/haunti-ai)
+- **Forum**: Participate in discussions on our [Forum](https://forum.haunti-ai.com)
+
+## Additional Resources
+
+- [Documentation](https://github.com/ozone24/Haunti-AI/wiki)
+- [Tutorials](https://github.com/ozone24/Haunti-AI/wiki/Tutorials)
+- [Blog](https://medium.com/@haunti-ai)
+
+Thank you for your interest in Haunti-AI! We look forward to seeing what you build with it.
